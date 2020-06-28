@@ -22,7 +22,6 @@ class DocumentRanker(Model):
         vocab: Vocabulary,
         text_field_embedder: TextFieldEmbedder,
         relevance_matcher: RelevanceMatcher,
-        feedforward: Optional[FeedForward] = None,
         dropout: float = None,
         num_labels: int = None,
         label_namespace: str = "labels",
@@ -66,12 +65,23 @@ class DocumentRanker(Model):
 
         """
         This isn't exactly a 'hack', but it's definitely not the most efficient way to do it.
-        Our matcher expects a single query/document pair, but we have query/[d_0, ..., d_n].
+        Our matcher expects a single (query, document) pair, but we have (query, [d_0, ..., d_n]).
         To get around this, we expand the query embeddings to create these pairs, and then
-        flatten both into the 3D tensor [batch*num_options, words, dim] as expected by the matcher.
+        flatten both into the 3D tensor [batch*num_options, words, dim] expected by the matcher. 
+        The expansion does this:
 
-        It would likely be more efficient^* to rewrite the matrix multiplications in the relevant matchers,
-        but this is a more general solution.
+        [
+            (q_0, [d_{0,0}, ..., d_{0,n}]), 
+            (q_1, [d_{1,0}, ..., d_{1,n}])
+        ]
+        =>
+        [
+            [ (q_0, d_{0,0}), ..., (q_0, d_{0,n}) ],
+            [ (q_1, d_{1,0}), ..., (q_1, d_{1,n}) ]
+        ]
+
+        Which we then flatten along the batch dimension. It would likely be more efficient^* 
+        to rewrite the matrix multiplications in the relevance matchers, but this is a more general solution.
 
         ^* @Matt Gardner: Is this actually inefficient? `torch.expand` doesn't use additional memory to make copies.
         """
