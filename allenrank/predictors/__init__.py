@@ -1,0 +1,1 @@
+from allenrank.predictors.paper_classifier_predictor import PaperClassifierPredictor
