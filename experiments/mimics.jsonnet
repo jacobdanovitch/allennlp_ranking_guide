@@ -20,7 +20,6 @@ local MODEL_NAME = "google/bert_uncased_L-2_H-128_A-2";
   # "test_data_path": "https://allennlp.s3.amazonaws.com/datasets/sst/test.jsonl",
   "model": {
     "type": "ranker",
-    "num_labels": 3,
     "text_field_embedder": {
       "token_embedders": {
         "tokens": {
@@ -29,11 +28,9 @@ local MODEL_NAME = "google/bert_uncased_L-2_H-128_A-2";
         }
       }
     },
-    "seq2vec_encoder": {
-       "type": "lstm",
-       "input_size": 300,
-       "hidden_size": 512,
-       "num_layers": 2
+    "relevance_matcher": {
+      "type": "knrm",
+      "n_kernels": 5
     }
   },
   "data_loader": {

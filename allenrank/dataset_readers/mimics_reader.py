@@ -74,6 +74,8 @@ class MIMICSDatasetReader(DatasetReader):
         fields = { 'tokens': token_field, 'options': options_field }
 
         if labels:
-            fields['labels'] = ListField([LabelField(int(l), skip_indexing=True) for l in labels if not pd.isnull(l)])
+            # 0 = no click, [1,2] = click
+            label_list = [LabelField(int(l > 0), skip_indexing=True) for l in labels if not pd.isnull(l)]
+            fields['labels'] = ListField(label_list)
         
         return Instance(fields)
