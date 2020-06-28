@@ -1,1 +1,1 @@
-from allenrank.dataset_readers.semantic_scholar_papers import SemanticScholarDatasetReader
+from allenrank.dataset_readers.mimics_reader import *

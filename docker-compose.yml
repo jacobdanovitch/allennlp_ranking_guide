@@ -1,0 +1,26 @@
+version: '3'
+services: 
+    train:
+        container_name: "pssearch"
+        build: .
+        # image: allennlp/allennlp:latest
+        volumes:
+            - $HOME/.allennlp:/root/.allennlp
+            - $HOME/.cache:/root/.cache
+            - $HOME/nltk_data:/root/nltk_data
+            - ./:/stage/allennlp
+        command: train experiments/pssearch.jsonnet -s /tmp/models -f
+    debug:
+        container_name: "pssearch"
+        build: .
+        # image: allennlp/allennlp:latest
+        volumes:
+            - $HOME/.allennlp:/root/.allennlp
+            - $HOME/.cache:/root/.cache
+            - $HOME/nltk_data:/root/nltk_data
+            - ./:/stage/allennlp
+        entrypoint: python
+        command: debug.py experiments/pssearch.jsonnet -s /tmp/models -f
+    version:
+        image: allennlp/allennlp:latest
+        command: --version

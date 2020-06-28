@@ -10,8 +10,10 @@ from allennlp.nn import InitializerApplicator, util
 from allennlp.nn.util import get_text_field_mask
 from allennlp.training.metrics import CategoricalAccuracy
 
+import torchsnooper
 
-@Model.register("DocumentRanker")
+
+@Model.register("ranker")
 class DocumentRanker(Model):
     def __init__(
         self,
@@ -59,11 +61,20 @@ class DocumentRanker(Model):
         self._loss = torch.nn.CrossEntropyLoss()
         initializer(self)
 
+    @torchsnooper.snoop(watch=('tokens.keys()'))
     def forward(  # type: ignore
-        self, tokens: TextFieldTensors, label: torch.IntTensor = None
+        self, 
+        tokens: TextFieldTensors, # batch * words
+        options: TextFieldTensors, # batch * num_options * words
+        labels: torch.IntTensor = None # batch * num_options
     ) -> Dict[str, torch.Tensor]:
         embedded_text = self._text_field_embedder(tokens)
         mask = get_text_field_mask(tokens)
+
+        embedded_options = self._text_field_embedder(options, num_wrapping_dims=1) # mask.dim() - 2
+        options_mask = get_text_field_mask(options)
+
+        0/0
 
         if self._seq2seq_encoder:
             embedded_text = self._seq2seq_encoder(embedded_text, mask=mask)
@@ -124,4 +135,4 @@ class DocumentRanker(Model):
         metrics = {"accuracy": self._accuracy.get_metric(reset)}
         return metrics
 
-    default_predictor = "text_classifier"
+    default_predictor = "document_ranker"

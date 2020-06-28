@@ -1,1 +1,1 @@
-from allenrank.models.academic_paper_classifier import AcademicPaperClassifier
+from allenrank.models.ranker import *
