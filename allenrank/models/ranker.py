@@ -45,7 +45,7 @@ class DocumentRanker(Model):
         self._loss = torch.nn.BCEWithLogitsLoss()
         initializer(self)
 
-    @torchsnooper.snoop(watch='labels')
+    # @torchsnooper.snoop()
     def forward(  # type: ignore
         self, 
         tokens: TextFieldTensors, # batch * words

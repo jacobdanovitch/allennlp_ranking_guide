@@ -1,4 +1,5 @@
 from allenrank.modules.relevance import (
     base,
-    knrm
+    bert_cls,
+    knrm,
 )

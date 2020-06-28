@@ -1,15 +1,29 @@
 # Document Ranking with AllenNLP
 
-An AllenNLP project created with [cookiecutter-allennlp](https://github.com/jacobdanovitch/cookiecutter-allennlp).
-
-## Installation
-
-Install dependencies by running `pip install -r requirements.txt`.
+An implementation of models for document ranking in AllenNLP.
 
 ## Training
 
-```bash
-allennlp train experiments/venue_classifier.json -s /tmp/your_output_dir_here --include-package my_library
+### Docker
+
+You can use the `docker-compose` file to start a docker container with the latest image of AllenNLP:
+
+```shell
+docker-compose run [train/version]
+```
+
+### Manually
+
+First, install the dependencies:
+
+```shell
+pip install -r requirements.txt
+```
+
+Then:
+
+```shell
+allennlp train experiments/mimics.jsonnet -s /tmp/your_output_dir
 ```
 
 <hr/>

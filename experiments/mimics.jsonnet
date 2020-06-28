@@ -29,8 +29,11 @@ local MODEL_NAME = "google/bert_uncased_L-2_H-128_A-2";
       }
     },
     "relevance_matcher": {
-      "type": "knrm",
-      "n_kernels": 5
+      // "type": "knrm",
+      // "n_kernels": 5
+
+      // "type": "bert_cls", 
+      // "seq2vec_encoder": { "type": "cls_pooler", "embedding_dim": 128 }
     }
   },
   "data_loader": {
