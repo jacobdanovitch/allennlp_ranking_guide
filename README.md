@@ -1,6 +1,4 @@
-==============================
-Document Ranking with AllenNLP
-==============================
+# Document Ranking with AllenNLP
 
 An AllenNLP project created with [cookiecutter-allennlp](https://github.com/jacobdanovitch/cookiecutter-allennlp).
 
