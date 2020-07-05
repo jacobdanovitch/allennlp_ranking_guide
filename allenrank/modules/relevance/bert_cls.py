@@ -12,18 +12,13 @@ from allenrank.modules.relevance.base import RelevanceMatcher
 class BertCLS(RelevanceMatcher):
     def __init__(
         self,
-        seq2vec_encoder: Seq2VecEncoder # should probably be cls_pooler
+        seq2vec_encoder: Seq2VecEncoder, # should generally be cls_pooler,
+        **kwargs
     ):
-
-        super().__init__()
+        kwargs['input_dim'] = seq2vec_encoder.get_output_dim()*4
+        super().__init__(**kwargs)
 
         self._seq2vec_encoder = seq2vec_encoder
-
-        # bias is set to True in original code (we found it to not help, how could it?)
-        self.dense = nn.Linear(self._seq2vec_encoder.get_output_dim()*4, 1, bias=False)
-
-        # init with small weights, otherwise the dense output is way to high for the tanh -> resulting in loss == 1 all the time
-        torch.nn.init.uniform_(self.dense.weight, -0.014, 0.014)  # inits taken from matchzoo
 
     def forward(
         self, 

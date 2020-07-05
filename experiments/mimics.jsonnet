@@ -13,7 +13,7 @@ local MODEL_NAME = "google/bert_uncased_L-2_H-128_A-2";
         "model_name": MODEL_NAME,
       }
     },
-    "max_instances": 100
+    // "max_instances": 100
   },
   "train_data_path": "https://raw.githubusercontent.com/microsoft/MIMICS/master/data/MIMICS-Manual.tsv",
   # "validation_data_path": "https://allennlp.s3.amazonaws.com/datasets/sst/dev.jsonl",
@@ -29,26 +29,28 @@ local MODEL_NAME = "google/bert_uncased_L-2_H-128_A-2";
       }
     },
     "relevance_matcher": {
+      "num_classes": 3,
+      "input_dim": 128,
       // "type": "knrm",
       // "n_kernels": 5
 
-      // "type": "bert_cls", 
-      // "seq2vec_encoder": { "type": "cls_pooler", "embedding_dim": 128 }
+      "type": "bert_cls", 
+      "seq2vec_encoder": { "type": "cls_pooler", "embedding_dim": 128 }
     }
   },
   "data_loader": {
     "type": "default",
-    "batch_size" : 32
+    "batch_size" : 16
   },
   "trainer": {
     "num_epochs": 5,
     "patience": 1,
     "grad_norm": 5.0,
     "validation_metric": "+accuracy",
-    // "cuda_device": 0,
+    "cuda_device": 0,
     "optimizer": {
-      "type": "adam",
-      "lr": 0.001
+      "type": "huggingface_adamw",
+      "lr": 0.0001
     }
   }
 }

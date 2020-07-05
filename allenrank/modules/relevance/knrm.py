@@ -17,10 +17,10 @@ class KNRM(RelevanceMatcher):
     '''
     def __init__(
         self,
-        n_kernels: int
+        n_kernels: int,
+        **kwargs
     ):
-
-        super().__init__()
+        super().__init__(**kwargs)
 
         # static - kernel size & magnitude variables
         self.mu = torch.tensor(self.kernel_mus(n_kernels), requires_grad=False).view(1, 1, 1, n_kernels)
@@ -28,13 +28,6 @@ class KNRM(RelevanceMatcher):
 
         # this does not really do "attention" - just a plain cosine matrix calculation (without learnable weights) 
         self.cosine_module = CosineMatrixAttention()
-
-        # bias is set to True in original code (we found it to not help, how could it?)
-        self.dense = nn.Linear(n_kernels, 1, bias=False)
-
-        # init with small weights, otherwise the dense output is way to high for the tanh -> resulting in loss == 1 all the time
-        torch.nn.init.uniform_(self.dense.weight, -0.014, 0.014)  # inits taken from matchzoo
-        #self.dense.bias.data.fill_(0.0)
 
     def forward(
         self, 

@@ -1,5 +1,8 @@
 allennlp
+allennlp-models
 torchsnooper
+
+pandas
 
 pytest-pythonpath
 

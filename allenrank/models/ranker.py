@@ -5,12 +5,13 @@ import torch
 
 from allennlp.data import TextFieldTensors, Vocabulary
 from allennlp.models.model import Model
-from allennlp.modules import FeedForward, Seq2SeqEncoder, Seq2VecEncoder, TextFieldEmbedder
+from allennlp.modules import FeedForward, Seq2SeqEncoder, Seq2VecEncoder, TextFieldEmbedder, TimeDistributed
 from allennlp.nn import InitializerApplicator, util
 from allennlp.nn.util import get_text_field_mask
 from allennlp.training.metrics import CategoricalAccuracy, Auc, F1Measure
 
 from allenrank.modules.relevance.base import RelevanceMatcher
+from allenrank.training.metrics.multilabel_f1 import MultiLabelF1Measure
 
 import torchsnooper
 
@@ -32,19 +33,19 @@ class DocumentRanker(Model):
 
         super().__init__(vocab, **kwargs)
         self._text_field_embedder = text_field_embedder
-        self._relevance_matcher = relevance_matcher
+        self._relevance_matcher = TimeDistributed(relevance_matcher)
 
         self._dropout = dropout and torch.nn.Dropout(dropout)
 
         self._label_namespace = label_namespace
         self._namespace = namespace
 
-        self._auc = Auc() # CategoricalAccuracy()
-        self._f1 = F1Measure(positive_label=1)
-        self._loss = torch.nn.BCEWithLogitsLoss()
+        self._accuracy = CategoricalAccuracy()
+        self._f1 = F1Measure(positive_label=2) # MultiLabelF1Measure()
+        self._loss = torch.nn.CrossEntropyLoss(reduction='none')
         initializer(self)
 
-    # @torchsnooper.snoop()
+    # @torchsnooper.snoop(watch='loss.size()')
     def forward(  # type: ignore
         self, 
         tokens: TextFieldTensors, # batch * words
@@ -86,27 +87,23 @@ class DocumentRanker(Model):
         ^* @Matt Gardner: Is this actually inefficient? `torch.expand` doesn't use additional memory to make copies.
         """
 
-        embedded_text = embedded_text.unsqueeze(1).expand(-1, embedded_options.size(1), -1, -1).flatten(0, 1) # [batch, num_options, words, dim] =>  [batch*num_options, ...]
-        mask = mask.unsqueeze(1).expand(-1, embedded_options.size(1), -1).flatten(0, 1)
-
-        embedded_options = embedded_options.flatten(0, 1)
-        options_mask = options_mask.flatten(0, 1)
+        embedded_text = embedded_text.unsqueeze(1).expand(-1, embedded_options.size(1), -1, -1) # [batch, num_options, words, dim]
+        mask = mask.unsqueeze(1).expand(-1, embedded_options.size(1), -1)
         
-        scores = self._relevance_matcher(embedded_text, embedded_options, mask, options_mask)
-        probs = torch.sigmoid(scores)
+        scores = self._relevance_matcher(embedded_text, embedded_options, mask, options_mask) # [batch, ...num_labels]
+        probs = torch.softmax(scores, -1)
 
-        output_dict = {"logits": scores.view(*output_shape), "probs": probs.view(*output_shape)}
+        output_dict = {"logits": scores, "probs": probs} # .view(*output_shape), .view(*output_shape)
         output_dict["token_ids"] = util.get_token_ids_from_text_field_tensors(tokens)
         if labels is not None:
-            labels = labels.view(-1)
-            loss = self._loss(scores, labels.type_as(scores)) # .long()
-            output_dict["loss"] = loss
+            candidate_mask = (labels == -1) # (options_mask.sum(-1) == 0) # .type_as(options_mask)
 
-            # @Matt Gardner: What's the best way to compute metrics here, since it's a ListField (thus some are masked)?
-            # Is there something for POS tagging or similar?
+            loss = self._loss(scores.view(-1, scores.size(-1)), labels.masked_fill(labels == -1, 0).view(-1)) # .type_as(scores) # TODO: Mask this with candidate_mask
+            output_dict["loss"] = (loss * candidate_mask.view(-1)).mean()
 
-            # self._auc(scores, labels)
-            # self._f1(scores.unsqueeze(-1), labels)
+            # TODO: Should these use scores or probs?
+            self._f1(scores.view(-1, scores.size(-1)), labels.masked_fill(labels == -1, 0).view(-1), candidate_mask.view(-1)) # scores.unsqueeze(-1), labels)
+            self._accuracy(scores.view(-1, scores.size(-1)), labels.masked_fill(labels == -1, 0).view(-1), candidate_mask.view(-1)) # scores.unsqueeze(-1), labels)
 
         return output_dict
 
@@ -143,7 +140,9 @@ class DocumentRanker(Model):
         return output_dict
 
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
-        metrics = {} # "auc": self._auc.get_metric(reset)
+        metrics = {"f1": self._f1.get_metric(reset)[-1], "accuracy": self._accuracy.get_metric(reset)}
         return metrics
 
     default_predictor = "document_ranker"
+
+
