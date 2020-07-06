@@ -8,6 +8,8 @@ from allennlp.data import TextFieldTensors
 
 from allenrank.modules.relevance.base import RelevanceMatcher
 
+import torchsnooper
+
 @RelevanceMatcher.register('knrm')
 class KNRM(RelevanceMatcher):
     '''
@@ -20,11 +22,14 @@ class KNRM(RelevanceMatcher):
         n_kernels: int,
         **kwargs
     ):
+        kwargs['input_dim'] = n_kernels
         super().__init__(**kwargs)
 
         # static - kernel size & magnitude variables
-        self.mu = torch.tensor(self.kernel_mus(n_kernels), requires_grad=False).view(1, 1, 1, n_kernels)
-        self.sigma = torch.tensor(self.kernel_sigmas(n_kernels), requires_grad=False).view(1, 1, 1, n_kernels)
+        # self.mu = nn.Parameter(self.kernel_mus(n_kernels), requires_grad=False).view(1, 1, 1, n_kernels)
+        self.register_buffer('mu', nn.Parameter(self.kernel_mus(n_kernels), requires_grad=False).view(1, 1, 1, n_kernels))
+        # self.sigma = nn.Parameter(self.kernel_sigmas(n_kernels), requires_grad=False).view(1, 1, 1, n_kernels)
+        self.register_buffer('sigma', nn.Parameter(self.kernel_sigmas(n_kernels), requires_grad=False).view(1, 1, 1, n_kernels))
 
         # this does not really do "attention" - just a plain cosine matrix calculation (without learnable weights) 
         self.cosine_module = CosineMatrixAttention()
@@ -43,7 +48,7 @@ class KNRM(RelevanceMatcher):
         # prepare embedding tensors & paddings masks
         # -------------------------------------------------------
 
-        query_by_doc_mask = torch.bmm(query_mask.unsqueeze(-1), candidates_mask.unsqueeze(-1).transpose(-1, -2))
+        query_by_doc_mask = torch.bmm(query_mask.unsqueeze(-1).float(), candidates_mask.unsqueeze(-1).transpose(-1, -2).float())
         query_by_doc_mask_view = query_by_doc_mask.unsqueeze(-1)
 
         #
@@ -81,6 +86,12 @@ class KNRM(RelevanceMatcher):
             query_mean_vector = query_embeddings.sum(dim=1) / query_mask.sum(dim=1).unsqueeze(-1)
             return score, {"score":score,"per_kernel":per_kernel,"query_mean_vector":query_mean_vector,"cosine_matrix_masked":cosine_matrix_masked}
         return score
+    
+    def cuda(self, device=None):
+        self = super().cuda(device)
+        self.mu = self.mu.cuda(device)
+        self.sigma = self.sigma.cuda(device)
+        return self 
 
 
     def kernel_mus(self, n_kernels: int):
@@ -97,7 +108,7 @@ class KNRM(RelevanceMatcher):
         l_mu.append(1 - bin_size / 2)  # mu: middle of the bin
         for i in range(1, n_kernels - 1):
             l_mu.append(l_mu[i] - bin_size)
-        return l_mu
+        return torch.tensor(l_mu, device=self.dense.weight.device)
 
     def kernel_sigmas(self, n_kernels: int):
         """
@@ -113,4 +124,4 @@ class KNRM(RelevanceMatcher):
             return l_sigma
 
         l_sigma += [0.5 * bin_size] * (n_kernels - 1)
-        return l_sigma
+        return torch.tensor(l_sigma, device=self.dense.weight.device)

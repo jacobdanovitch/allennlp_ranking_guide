@@ -8,10 +8,11 @@ from allennlp.models.model import Model
 from allennlp.modules import FeedForward, Seq2SeqEncoder, Seq2VecEncoder, TextFieldEmbedder, TimeDistributed
 from allennlp.nn import InitializerApplicator, util
 from allennlp.nn.util import get_text_field_mask
-from allennlp.training.metrics import CategoricalAccuracy, Auc, F1Measure
+from allennlp.training.metrics import CategoricalAccuracy, BooleanAccuracy, Auc, F1Measure, FBetaMeasure, PearsonCorrelation
 
 from allenrank.modules.relevance.base import RelevanceMatcher
 from allenrank.training.metrics.multilabel_f1 import MultiLabelF1Measure
+from allenrank.training.metrics.ndcg import NDCG
 
 import torchsnooper
 
@@ -40,12 +41,14 @@ class DocumentRanker(Model):
         self._label_namespace = label_namespace
         self._namespace = namespace
 
-        self._accuracy = CategoricalAccuracy()
-        self._f1 = F1Measure(positive_label=2) # MultiLabelF1Measure()
-        self._loss = torch.nn.CrossEntropyLoss(reduction='none')
+        self._auc = Auc()
+        self._corr = PearsonCorrelation()
+        self._f1 = F1Measure(positive_label=1)
+        self._ndcg = NDCG(padding_value=-1)
+        
+        self._loss = torch.nn.MSELoss(reduction='none') # BCEWithLogitsLoss MSELoss # CrossEntropyLoss BCELoss
         initializer(self)
 
-    # @torchsnooper.snoop(watch='loss.size()')
     def forward(  # type: ignore
         self, 
         tokens: TextFieldTensors, # batch * words
@@ -90,20 +93,25 @@ class DocumentRanker(Model):
         embedded_text = embedded_text.unsqueeze(1).expand(-1, embedded_options.size(1), -1, -1) # [batch, num_options, words, dim]
         mask = mask.unsqueeze(1).expand(-1, embedded_options.size(1), -1)
         
-        scores = self._relevance_matcher(embedded_text, embedded_options, mask, options_mask) # [batch, ...num_labels]
-        probs = torch.softmax(scores, -1)
+        scores = self._relevance_matcher(embedded_text, embedded_options, mask, options_mask).squeeze() # [batch, ...num_labels]
+        probs = torch.sigmoid(scores).view(-1)
 
-        output_dict = {"logits": scores, "probs": probs} # .view(*output_shape), .view(*output_shape)
+        output_dict = {"logits": scores, "probs": probs} # .view(*output_shape)
         output_dict["token_ids"] = util.get_token_ids_from_text_field_tensors(tokens)
         if labels is not None:
-            candidate_mask = (labels == -1) # (options_mask.sum(-1) == 0) # .type_as(options_mask)
-
-            loss = self._loss(scores.view(-1, scores.size(-1)), labels.masked_fill(labels == -1, 0).view(-1)) # .type_as(scores) # TODO: Mask this with candidate_mask
-            output_dict["loss"] = (loss * candidate_mask.view(-1)).mean()
-
-            # TODO: Should these use scores or probs?
-            self._f1(scores.view(-1, scores.size(-1)), labels.masked_fill(labels == -1, 0).view(-1), candidate_mask.view(-1)) # scores.unsqueeze(-1), labels)
-            self._accuracy(scores.view(-1, scores.size(-1)), labels.masked_fill(labels == -1, 0).view(-1), candidate_mask.view(-1)) # scores.unsqueeze(-1), labels)
+            _labels = labels
+            labels = labels.view(-1)
+            candidate_mask = (labels != -1)
+            
+            loss = self._loss(probs, labels.type_as(scores)) # scores.view(-1)
+            output_dict["loss"] = loss.masked_fill(~candidate_mask, 0).sum() / candidate_mask.sum()
+            
+            binary_labels = (labels > 0.5).long()
+            
+            self._auc(probs, binary_labels, candidate_mask)
+            self._corr(probs, labels, candidate_mask)
+            self._f1(inverse_one_hot(probs), binary_labels, candidate_mask)
+            self._ndcg(probs.view_as(scores), _labels, candidate_mask.view_as(scores))
 
         return output_dict
 
@@ -140,9 +148,21 @@ class DocumentRanker(Model):
         return output_dict
 
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
-        metrics = {"f1": self._f1.get_metric(reset)[-1], "accuracy": self._accuracy.get_metric(reset)}
+        metrics = {
+            "auc": self._auc.get_metric(reset),
+            "r2": self._corr.get_metric(reset),
+            "ndcg": self._ndcg.get_metric(reset),
+            **dict(zip(("precision", "recall", "f1"), self._f1.get_metric(reset))),
+        }
         return metrics
 
     default_predictor = "document_ranker"
 
+
+# one_cold? many_hot?
+def inverse_one_hot(t: torch.Tensor):
+    t = t.view(-1, 1)
+    out = torch.cat([t, 1-t], -1)
+    assert (out.sum(-1) == 1).all()
+    return out
 

@@ -13,6 +13,7 @@ from allennlp.data.tokenizers import Tokenizer, SpacyTokenizer, WhitespaceTokeni
 from allennlp.common.checks import ConfigurationError
 
 import pandas as pd
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -34,22 +35,23 @@ class MIMICSDatasetReader(DatasetReader):
 
     @overrides
     def _read(self, file_path: str):
-        with open(cached_path(file_path), "r") as data_file:
-            logger.info("Reading instances from lines in file at: %s", file_path)
-            
-            _options_columns = [f'option_{i}' for i in range(1, 6)] # option_1, ..., option_5
-            _label_columns = [f'option_label_{i}' for i in range(1, 6)] # option_label_1, ..., option_label_5
+        logger.info("Reading instances from lines in file at: %s", file_path)
 
-            columns = ['query','question', *_options_columns, *_label_columns]
-            df = pd.read_csv(data_file, sep='\t', usecols=columns)
+        df = pd.read_csv(cached_path(file_path), sep='\t')
+        
+        _options_columns = [f'option_{i}' for i in range(1, 6)] # option_1, ..., option_5
+        _label_columns = df.filter(regex=r"option\_.*\_\d", axis=1).columns.tolist() # [f'option_label_{i}' for i in range(1, 6)] # option_label_1, ..., option_label_5
+        
+        columns = ['query','question', *_options_columns, *_label_columns]
+        df = df[columns]
 
-            df['options'] = df[_options_columns].fillna('').values.tolist()
-            df['labels'] = df[_label_columns].values.tolist()
+        df['options'] = df[_options_columns].fillna('').values.tolist()
+        df['labels'] = df[_label_columns].values.tolist()
 
-            df = df.drop(columns=[*_options_columns, *_label_columns])
+        df = df.drop(columns=[*_options_columns, *_label_columns])
 
-            for row in df.to_dict(orient='records'):
-                yield self.text_to_instance(**row)
+        for row in df.to_dict(orient='records'):
+            yield self.text_to_instance(**row)
 
     def _make_textfield(self, text: str):
         tokens = self.tokenizer.tokenize(text)
@@ -65,19 +67,25 @@ class MIMICSDatasetReader(DatasetReader):
         options: List[str],
         labels: List[str] = None
     ) -> Instance:  # type: ignore
+        options = list(filter(None, options))
+        
+        if labels:
+            assert all(l >= 0 for l in labels)
+            assert all((l == 0) for l in labels[len(options):])
+            labels = labels[:len(options)]
+            
         # query_field = self._make_textfield(query)
         # question_field = self._make_textfield(question)
         token_field = self._make_textfield((query, question))
 
-        options_field = ListField([self._make_textfield(o) for o in options if o != ''])
+        options_field = ListField([self._make_textfield(o) for o in options])
         # fields = { 'query': query_field, 'question': question_field, 'options': options_field }
         fields = { 'tokens': token_field, 'options': options_field }
 
         if labels:
-            # 0 = no click, [1,2] = click
-            # int(l > 0)
-            labels = map(int, filter(lambda x: not pd.isnull(x), labels))
-            label_list = [LabelField(int(l), skip_indexing=True) for l in labels]
-            fields['labels'] = ListField(label_list)
+            labels = list(map(float, filter(lambda x: not pd.isnull(x), labels)))
+            # label_list = [LabelField(l) for l in labels] # , skip_indexing=True
+            
+            fields['labels'] = ArrayField(np.array(labels), padding_value=-1) # ListField(label_list)
         
         return Instance(fields)
