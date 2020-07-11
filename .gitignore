@@ -4,3 +4,6 @@
 __pycache__/
 .ipynb_checkpoints/*
 .vscode/
+.logs/
+env/
+batch.sh

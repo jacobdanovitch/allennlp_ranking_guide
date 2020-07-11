@@ -1,4 +1,5 @@
-local DATA_ROOT = "/tmp/allenrank/data/mimics-clickexplore/%s";
+// local DATA_ROOT = "/tmp/allenrank/data/mimics-clickexplore/%s";
+local DATA_ROOT = "/scratch/jacobgdt/allenrank/data/mimics-clickexplore/%s";
 local MODEL_NAME = "google/bert_uncased_L-2_H-128_A-2";
 
 {
@@ -14,7 +15,7 @@ local MODEL_NAME = "google/bert_uncased_L-2_H-128_A-2";
         "model_name": MODEL_NAME,
       }
     },
-    "max_instances": 25000
+    "max_instances": 50000
   },
   "train_data_path": DATA_ROOT % "train.tsv",
   "validation_data_path": DATA_ROOT % "valid.tsv",
@@ -30,7 +31,7 @@ local MODEL_NAME = "google/bert_uncased_L-2_H-128_A-2";
       }
     },
     "relevance_matcher": {
-      "num_classes": 1,
+      // "num_classes": 1,
       "input_dim": 128,
       
       "type": "knrm",
@@ -47,14 +48,17 @@ local MODEL_NAME = "google/bert_uncased_L-2_H-128_A-2";
   },
   "data_loader": {
     "type": "default",
-    "batch_size" : 32
+    "batch_size" : 128
+  },
+  'distributed': {
+      "cuda_devices": [0,1],
   },
   "trainer": {
     "num_epochs": 5,
-    "patience": 1,
+    "patience": 2,
     "grad_norm": 5.0,
     "validation_metric": "+ndcg",
-    "cuda_device": 0,
+    // "cuda_device": 0,
     "optimizer": {
       "type": "adam", // "huggingface_adamw",
       "lr": 0.00075

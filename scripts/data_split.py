@@ -10,7 +10,9 @@ def save(df, fp):
 
 if __name__ == '__main__':
     url = sys.argv[1]
-    out_path = os.path.join('/tmp', 'allenrank', 'data', url.split('/')[-1].split('.')[0].lower())
+    save_root = sys.argv[2] if len(sys.argv) > 2 else '/tmp'
+
+    out_path = os.path.join(save_root, 'allenrank', 'data', url.split('/')[-1].split('.')[0].lower())
     os.makedirs(out_path, exist_ok=True)
     
     df = pd.read_csv(cached_path(url), sep='\t')

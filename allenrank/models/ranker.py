@@ -57,7 +57,7 @@ class DocumentRanker(Model):
         embedded_text = self._text_field_embedder(tokens)
         mask = get_text_field_mask(tokens).long()
 
-        embedded_options = self._text_field_embedder(options, num_wrapping_dims=1) # mask.dim() - 2
+        embedded_options = self._text_field_embedder(options, num_wrapping_dims=1) # options_mask.dim() - 2
         options_mask = get_text_field_mask(options).long()
 
         output_shape = options_mask.size()[:2] # [batch, num_options] (can't use labels here in case it doesn't exist)
