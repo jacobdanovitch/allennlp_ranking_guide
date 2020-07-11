@@ -1,3 +1,4 @@
+local DATA_ROOT = "/tmp/allenrank/data/mimics-clickexplore/%s";
 local MODEL_NAME = "google/bert_uncased_L-2_H-128_A-2";
 
 {
@@ -15,10 +16,9 @@ local MODEL_NAME = "google/bert_uncased_L-2_H-128_A-2";
     },
     "max_instances": 25000
   },
-  "train_data_path": "/tmp/allenrank/data/mimics-clickexplore/train.tsv",
-  // "train_data_path": "https://raw.githubusercontent.com/microsoft/MIMICS/master/data/MIMICS-Manual.tsv",
-  // "validation_data_path": "https://allennlp.s3.amazonaws.com/datasets/sst/dev.jsonl",
-  // "test_data_path": "https://allennlp.s3.amazonaws.com/datasets/sst/test.jsonl",
+  "train_data_path": DATA_ROOT % "train.tsv",
+  "validation_data_path": DATA_ROOT % "valid.tsv",
+  // "test_data_path": DATA_ROOT % "test.tsv",
   "model": {
     "type": "ranker",
     "text_field_embedder": {
@@ -33,11 +33,16 @@ local MODEL_NAME = "google/bert_uncased_L-2_H-128_A-2";
       "num_classes": 1,
       "input_dim": 128,
       
-      // "type": "knrm",
-      // "n_kernels": 100
+      "type": "knrm",
+      "n_kernels": 256,
 
-      "type": "bert_cls", 
-      "seq2vec_encoder": { "type": "cls_pooler", "embedding_dim": 128 }
+      // "type": "bert_cls", 
+      // "seq2vec_encoder": { "type": "cls_pooler", "embedding_dim": 128 }
+
+      // "type": "matchpyramid",
+      // "conv_output_size": [128, 128],
+      // "conv_kernel_size": [[2,2], [3,3]],
+      // "adaptive_pooling_size": [[2,2], [3,3]]
     }
   },
   "data_loader": {
@@ -48,11 +53,11 @@ local MODEL_NAME = "google/bert_uncased_L-2_H-128_A-2";
     "num_epochs": 5,
     "patience": 1,
     "grad_norm": 5.0,
-    "validation_metric": "+accuracy",
+    "validation_metric": "+ndcg",
     "cuda_device": 0,
     "optimizer": {
-      "type": "huggingface_adamw",
-      "lr": 0.0005
+      "type": "adam", // "huggingface_adamw",
+      "lr": 0.00075
     }
   }
 }

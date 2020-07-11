@@ -40,7 +40,7 @@ class MIMICSDatasetReader(DatasetReader):
         df = pd.read_csv(cached_path(file_path), sep='\t')
         
         _options_columns = [f'option_{i}' for i in range(1, 6)] # option_1, ..., option_5
-        _label_columns = df.filter(regex=r"option\_.*\_\d", axis=1).columns.tolist() # [f'option_label_{i}' for i in range(1, 6)] # option_label_1, ..., option_label_5
+        _label_columns = df.filter(regex=r"option\_.*\_\d", axis=1).columns.tolist() # option_label_1, ..., option_label_5
         
         columns = ['query','question', *_options_columns, *_label_columns]
         df = df[columns]
@@ -75,7 +75,6 @@ class MIMICSDatasetReader(DatasetReader):
             labels = labels[:len(options)]
             
         # query_field = self._make_textfield(query)
-        # question_field = self._make_textfield(question)
         token_field = self._make_textfield((query, question))
 
         options_field = ListField([self._make_textfield(o) for o in options])
@@ -83,9 +82,7 @@ class MIMICSDatasetReader(DatasetReader):
         fields = { 'tokens': token_field, 'options': options_field }
 
         if labels:
-            labels = list(map(float, filter(lambda x: not pd.isnull(x), labels)))
-            # label_list = [LabelField(l) for l in labels] # , skip_indexing=True
-            
-            fields['labels'] = ArrayField(np.array(labels), padding_value=-1) # ListField(label_list)
+            labels = list(map(float, filter(lambda x: not pd.isnull(x), labels)))            
+            fields['labels'] = ArrayField(np.array(labels), padding_value=-1)
         
         return Instance(fields)

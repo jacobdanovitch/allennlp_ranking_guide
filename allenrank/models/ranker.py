@@ -12,7 +12,7 @@ from allennlp.training.metrics import CategoricalAccuracy, BooleanAccuracy, Auc,
 
 from allenrank.modules.relevance.base import RelevanceMatcher
 from allenrank.training.metrics.multilabel_f1 import MultiLabelF1Measure
-from allenrank.training.metrics.ndcg import NDCG
+from allenrank.training.metrics import NDCG, MRR
 
 import torchsnooper
 
@@ -42,8 +42,7 @@ class DocumentRanker(Model):
         self._namespace = namespace
 
         self._auc = Auc()
-        self._corr = PearsonCorrelation()
-        self._f1 = F1Measure(positive_label=1)
+        self._mrr = MRR(padding_value=-1)
         self._ndcg = NDCG(padding_value=-1)
         
         self._loss = torch.nn.MSELoss(reduction='none') # BCEWithLogitsLoss MSELoss # CrossEntropyLoss BCELoss
@@ -86,8 +85,6 @@ class DocumentRanker(Model):
 
         Which we then flatten along the batch dimension. It would likely be more efficient^* 
         to rewrite the matrix multiplications in the relevance matchers, but this is a more general solution.
-
-        ^* @Matt Gardner: Is this actually inefficient? `torch.expand` doesn't use additional memory to make copies.
         """
 
         embedded_text = embedded_text.unsqueeze(1).expand(-1, embedded_options.size(1), -1, -1) # [batch, num_options, words, dim]
@@ -103,14 +100,13 @@ class DocumentRanker(Model):
             labels = labels.view(-1)
             candidate_mask = (labels != -1)
             
-            loss = self._loss(probs, labels.type_as(scores)) # scores.view(-1)
+            loss = self._loss(probs, labels.type_as(scores))
             output_dict["loss"] = loss.masked_fill(~candidate_mask, 0).sum() / candidate_mask.sum()
             
             binary_labels = (labels > 0.5).long()
             
             self._auc(probs, binary_labels, candidate_mask)
-            self._corr(probs, labels, candidate_mask)
-            self._f1(inverse_one_hot(probs), binary_labels, candidate_mask)
+            self._mrr(probs.view_as(scores), _labels, candidate_mask.view_as(scores))
             self._ndcg(probs.view_as(scores), _labels, candidate_mask.view_as(scores))
 
         return output_dict
@@ -150,9 +146,8 @@ class DocumentRanker(Model):
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
         metrics = {
             "auc": self._auc.get_metric(reset),
-            "r2": self._corr.get_metric(reset),
+            "mrr": self._mrr.get_metric(reset),
             "ndcg": self._ndcg.get_metric(reset),
-            **dict(zip(("precision", "recall", "f1"), self._f1.get_metric(reset))),
         }
         return metrics
 

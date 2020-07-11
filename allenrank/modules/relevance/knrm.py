@@ -26,10 +26,8 @@ class KNRM(RelevanceMatcher):
         super().__init__(**kwargs)
 
         # static - kernel size & magnitude variables
-        # self.mu = nn.Parameter(self.kernel_mus(n_kernels), requires_grad=False).view(1, 1, 1, n_kernels)
-        self.register_buffer('mu', nn.Parameter(self.kernel_mus(n_kernels), requires_grad=False).view(1, 1, 1, n_kernels))
-        # self.sigma = nn.Parameter(self.kernel_sigmas(n_kernels), requires_grad=False).view(1, 1, 1, n_kernels)
-        self.register_buffer('sigma', nn.Parameter(self.kernel_sigmas(n_kernels), requires_grad=False).view(1, 1, 1, n_kernels))
+        self.register_buffer('mu', self.kernel_mus(n_kernels).view(1, 1, 1, n_kernels))
+        self.register_buffer('sigma', self.kernel_sigmas(n_kernels).view(1, 1, 1, n_kernels))
 
         # this does not really do "attention" - just a plain cosine matrix calculation (without learnable weights) 
         self.cosine_module = CosineMatrixAttention()
@@ -108,7 +106,7 @@ class KNRM(RelevanceMatcher):
         l_mu.append(1 - bin_size / 2)  # mu: middle of the bin
         for i in range(1, n_kernels - 1):
             l_mu.append(l_mu[i] - bin_size)
-        return torch.tensor(l_mu, device=self.dense.weight.device)
+        return nn.Parameter(torch.tensor(l_mu, device=self.dense.weight.device), requires_grad=False)
 
     def kernel_sigmas(self, n_kernels: int):
         """
@@ -124,4 +122,4 @@ class KNRM(RelevanceMatcher):
             return l_sigma
 
         l_sigma += [0.5 * bin_size] * (n_kernels - 1)
-        return torch.tensor(l_sigma, device=self.dense.weight.device)
+        return nn.Parameter(torch.tensor(l_sigma, device=self.dense.weight.device), requires_grad=False)
