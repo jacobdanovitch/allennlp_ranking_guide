@@ -26,8 +26,6 @@ class DocumentRanker(Model):
         relevance_matcher: RelevanceMatcher,
         dropout: float = None,
         num_labels: int = None,
-        label_namespace: str = "labels",
-        namespace: str = "tokens",
         initializer: InitializerApplicator = InitializerApplicator(),
         **kwargs,
     ) -> None:
@@ -38,16 +36,14 @@ class DocumentRanker(Model):
 
         self._dropout = dropout and torch.nn.Dropout(dropout)
 
-        self._label_namespace = label_namespace
-        self._namespace = namespace
-
         self._auc = Auc()
         self._mrr = MRR(padding_value=-1)
         self._ndcg = NDCG(padding_value=-1)
         
-        self._loss = torch.nn.MSELoss(reduction='none') # BCEWithLogitsLoss MSELoss # CrossEntropyLoss BCELoss
+        self._loss = torch.nn.MSELoss(reduction='none')
         initializer(self)
 
+    # @torchsnooper.snoop()
     def forward(  # type: ignore
         self, 
         tokens: TextFieldTensors, # batch * words
@@ -59,8 +55,6 @@ class DocumentRanker(Model):
 
         embedded_options = self._text_field_embedder(options, num_wrapping_dims=1) # options_mask.dim() - 2
         options_mask = get_text_field_mask(options).long()
-
-        output_shape = options_mask.size()[:2] # [batch, num_options] (can't use labels here in case it doesn't exist)
 
         if self._dropout:
             embedded_text = self._dropout(embedded_text)
@@ -83,31 +77,32 @@ class DocumentRanker(Model):
             [ (q_1, d_{1,0}), ..., (q_1, d_{1,n}) ]
         ]
 
-        Which we then flatten along the batch dimension. It would likely be more efficient^* 
+        Which we then flatten along the batch dimension. It would likely be more efficient
         to rewrite the matrix multiplications in the relevance matchers, but this is a more general solution.
         """
 
         embedded_text = embedded_text.unsqueeze(1).expand(-1, embedded_options.size(1), -1, -1) # [batch, num_options, words, dim]
         mask = mask.unsqueeze(1).expand(-1, embedded_options.size(1), -1)
         
-        scores = self._relevance_matcher(embedded_text, embedded_options, mask, options_mask).squeeze() # [batch, ...num_labels]
-        probs = torch.sigmoid(scores).view(-1)
+        scores = self._relevance_matcher(embedded_text, embedded_options, mask, options_mask).squeeze(-1)
+        probs = torch.sigmoid(scores)
 
-        output_dict = {"logits": scores, "probs": probs} # .view(*output_shape)
+        output_dict = {"logits": scores, "probs": probs}
         output_dict["token_ids"] = util.get_token_ids_from_text_field_tensors(tokens)
         if labels is not None:
-            _labels = labels
+            label_mask = (labels != -1)
+            
+            self._mrr(probs, labels, label_mask)
+            self._ndcg(probs, labels, label_mask)
+            
+            probs = probs.view(-1)
             labels = labels.view(-1)
-            candidate_mask = (labels != -1)
+            label_mask = label_mask.view(-1)
             
-            loss = self._loss(probs, labels.type_as(scores))
-            output_dict["loss"] = loss.masked_fill(~candidate_mask, 0).sum() / candidate_mask.sum()
+            self._auc(probs, (labels > 0.5).long(), label_mask)
             
-            binary_labels = (labels > 0.5).long()
-            
-            self._auc(probs, binary_labels, candidate_mask)
-            self._mrr(probs.view_as(scores), _labels, candidate_mask.view_as(scores))
-            self._ndcg(probs.view_as(scores), _labels, candidate_mask.view_as(scores))
+            loss = self._loss(probs, labels)
+            output_dict["loss"] = loss.masked_fill(~label_mask, 0).sum() / label_mask.sum()
 
         return output_dict
 
@@ -115,32 +110,6 @@ class DocumentRanker(Model):
     def make_output_human_readable(
         self, output_dict: Dict[str, torch.Tensor]
     ) -> Dict[str, torch.Tensor]:
-        """
-        Does a simple argmax over the probabilities, converts index to string label, and
-        add `"label"` key to the dictionary with the result.
-        """
-        predictions = output_dict["probs"]
-        if predictions.dim() == 2:
-            predictions_list = [predictions[i] for i in range(predictions.shape[0])]
-        else:
-            predictions_list = [predictions]
-        classes = []
-        for prediction in predictions_list:
-            label_idx = prediction.argmax(dim=-1).item()
-            label_str = self.vocab.get_index_to_token_vocabulary(self._label_namespace).get(
-                label_idx, str(label_idx)
-            )
-            classes.append(label_str)
-        output_dict["label"] = classes
-        tokens = []
-        for instance_tokens in output_dict["token_ids"]:
-            tokens.append(
-                [
-                    self.vocab.get_token_from_index(token_id.item(), namespace=self._namespace)
-                    for token_id in instance_tokens
-                ]
-            )
-        output_dict["tokens"] = tokens
         return output_dict
 
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
@@ -152,12 +121,3 @@ class DocumentRanker(Model):
         return metrics
 
     default_predictor = "document_ranker"
-
-
-# one_cold? many_hot?
-def inverse_one_hot(t: torch.Tensor):
-    t = t.view(-1, 1)
-    out = torch.cat([t, 1-t], -1)
-    assert (out.sum(-1) == 1).all()
-    return out
-

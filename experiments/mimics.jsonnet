@@ -1,5 +1,4 @@
-// local DATA_ROOT = "/tmp/allenrank/data/mimics-clickexplore/%s";
-local DATA_ROOT = "/scratch/jacobgdt/allenrank/data/mimics-clickexplore/%s";
+local DATA_ROOT = "/tmp/allenrank/data/mimics-clickexplore/%s";
 local MODEL_NAME = "google/bert_uncased_L-2_H-128_A-2";
 
 {
@@ -15,13 +14,14 @@ local MODEL_NAME = "google/bert_uncased_L-2_H-128_A-2";
         "model_name": MODEL_NAME,
       }
     },
-    "max_instances": 50000
+    "max_instances": 250
   },
   "train_data_path": DATA_ROOT % "train.tsv",
   "validation_data_path": DATA_ROOT % "valid.tsv",
   // "test_data_path": DATA_ROOT % "test.tsv",
   "model": {
     "type": "ranker",
+    "dropout": 0.15,
     "text_field_embedder": {
       "token_embedders": {
         "tokens": {
@@ -35,7 +35,7 @@ local MODEL_NAME = "google/bert_uncased_L-2_H-128_A-2";
       "input_dim": 128,
       
       "type": "knrm",
-      "n_kernels": 256,
+      "kernel_function": { "type": "gaussian", "n_kernels": 128 },
 
       // "type": "bert_cls", 
       // "seq2vec_encoder": { "type": "cls_pooler", "embedding_dim": 128 }
@@ -50,18 +50,23 @@ local MODEL_NAME = "google/bert_uncased_L-2_H-128_A-2";
     "type": "default",
     "batch_size" : 128
   },
-  'distributed': {
-      "cuda_devices": [0,1],
-  },
   "trainer": {
-    "num_epochs": 5,
-    "patience": 2,
-    "grad_norm": 5.0,
+    "num_epochs": 10,
+    "patience": 3,
+    // "grad_norm": 5.0,
     "validation_metric": "+ndcg",
-    // "cuda_device": 0,
+    "cuda_device": 0,
     "optimizer": {
-      "type": "adam", // "huggingface_adamw",
-      "lr": 0.00075
-    }
+      "type": "huggingface_adamw",
+      "lr": 0.0001,
+      "weight_decay": 0
+    },
+
+    "learning_rate_scheduler": {
+        "type": "reduce_on_plateau",
+        "factor": 0.5,
+        "mode": "max",
+        "patience": 0
+    },
   }
 }

@@ -170,6 +170,59 @@ This will simply take the `[CLS]` token from both `tokens` and `option`, compute
 
 ### 4. The `TimeDistributed` module
 
+Let's revisit the `forward` method of our `DocumentRanker`.
 
+```python
+    def forward( 
+        self, 
+        tokens: Dict[str, torch,Tensor], # batch * words
+        options: List[Dict[str, torch,Tensor]], # batch * num_options * words
+        labels: torch.FloatTensor = None # batch * num_options
+    ) -> Dict[str, torch.Tensor]:
+        embedded_text = self._text_field_embedder(tokens)
+        mask = get_text_field_mask(tokens).long()
+
+        embedded_options = self._text_field_embedder(options, num_wrapping_dims=1)
+        options_mask = get_text_field_mask(options).long()
+```
+
+We have a module to score each query/document pair, but our data is formatted as `(tokens, options)`. We need to align the query to each option for the relevance layer to work. 
+
+First, we'll use `torch.expand` to create a copy of the token embeddings for each option. Since `torch.expand` doesn't use additional memory, this doesn't harm space complexity, but time complexity will still increase. 
+
+```python
+# [batch, num_options, words, dim]
+embedded_text = embedded_text.unsqueeze(1).expand(-1, embedded_options.size(1), -1, -1)
+mask = mask.unsqueeze(1).expand(-1, embedded_options.size(1), -1)
+```
+
+Now, we have an identical copy of the token embeddings for each option embedding. From here, it's easier to stop worrying about the number of options and simply flatten everything to `[batch, words, dim]`. Luckily, there's a module to handle this for us; the `TimeDistributed` module will flatten each input tensor for us. We simply wrap our relevance matcher like so:
+
+```python
+self.relevance_matcher = TimeDistributed(self.relevance_matcher)
+```
+
+Now we can use our relevance matcher to score each pair.
+
+```python
+    def forward( 
+        self, 
+        tokens: Dict[str, torch,Tensor], # batch * words
+        options: List[Dict[str, torch,Tensor]], # batch * num_options * words
+        labels: torch.FloatTensor = None # batch * num_options
+    ) -> Dict[str, torch.Tensor]:
+        embedded_text = self._text_field_embedder(tokens)
+        mask = get_text_field_mask(tokens).long()
+
+        embedded_options = self._text_field_embedder(options, num_wrapping_dims=1)
+        options_mask = get_text_field_mask(options).long()
+
+        embedded_text = embedded_text.unsqueeze(1).expand(-1, embedded_options.size(1), -1, -1)
+mask = mask.unsqueeze(1).expand(-1, embedded_options.size(1), -1)
+
+
+        scores = self._relevance_matcher(embedded_text, embedded_options, mask, options_mask).squeeze(-1)
+        probs = torch.sigmoid(scores)
+```
 
 ### 5. Evaluating with custom metrics
