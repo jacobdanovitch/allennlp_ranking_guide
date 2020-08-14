@@ -8,13 +8,22 @@ import torch
 
 from allennlp.training.metrics.metric import Metric
 
-from allenrank.training.metrics.ranking_metric import (
-    RankingMetric, 
-    __apply_mask_and_get_true_sorted_by_preds, 
-    pad_to_max_length
-)
+from allenrank.training.metrics.ranking_metric import RankingMetric
 
 import torchsnooper
+
+
+def __apply_mask_and_get_true_sorted_by_preds(y_pred, y_true, padding_indicator=-1):
+    mask = y_true == padding_indicator
+
+    y_pred[mask] = float('-inf')
+    y_true[mask] = 0.0
+
+    _, indices = y_pred.sort(descending=True, dim=-1)
+    return torch.gather(y_true, dim=1, index=indices)
+
+def pad_to_max_length(seq: List[torch.Tensor], padding_value: int = -1):
+    return torch.nn.utils.rnn.pad_sequence(seq, batch_first=True, padding_value=padding_value)
 
 
 @Metric.register("ndcg")
@@ -23,19 +32,8 @@ class NDCG(RankingMetric):
     Computes NDCG.
     """
 
-    def get_metric(self, reset: bool = False):
-        """
-        Returns
-        -------
-        A tuple of the following metrics based on the accumulated count statistics:
-        precision : float
-        recall : float
-        f1-measure : float
-        """
-        predictions = pad_to_max_length(self._all_predictions, padding_value=self._padding_value)
-        labels = pad_to_max_length(self._all_gold_labels, padding_value=self._padding_value)
-        
-        score = ndcg(predictions, labels, padding_indicator=self._padding_value).mean().item()
+    def get_metric(self, reset: bool = False):        
+        score = ndcg(self.predictions, self.gold_labels, padding_indicator=self._padding_value).mean().item()
 
         if reset:
             self.reset()

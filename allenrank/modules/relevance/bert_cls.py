@@ -33,7 +33,7 @@ class BertCLS(RelevanceMatcher):
         query_encoded = self._seq2vec_encoder(query_embeddings, query_mask)
         candidate_encoded = self._seq2vec_encoder(candidates_embeddings, candidates_mask)
 
-        interaction_vector = torch.cat([query_encoded, candidate_encoded, query_encoded-candidate_encoded, query_encoded*candidate_encoded], dim=1)
+        interaction_vector = torch.cat([query_encoded, candidate_encoded, torch.abs(query_encoded-candidate_encoded), query_encoded*candidate_encoded], dim=1)
         dense_out = self.dense(interaction_vector)
         score = torch.squeeze(dense_out,1)
 

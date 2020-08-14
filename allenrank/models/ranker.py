@@ -99,7 +99,7 @@ class DocumentRanker(Model):
             labels = labels.view(-1)
             label_mask = label_mask.view(-1)
             
-            self._auc(probs, (labels > 0.5).long(), label_mask)
+            self._auc(probs, labels.ge(0.5).long(), label_mask)
             
             loss = self._loss(probs, labels)
             output_dict["loss"] = loss.masked_fill(~label_mask, 0).sum() / label_mask.sum()
