@@ -5,6 +5,7 @@ import torch.nn as nn
 
 from allennlp.modules import Seq2VecEncoder
 from allennlp.data import TextFieldTensors
+from allennlp.modules.seq2vec_encoders.cls_pooler import ClsPooler
 
 from allenrank.modules.relevance.base import RelevanceMatcher
 
@@ -12,13 +13,13 @@ from allenrank.modules.relevance.base import RelevanceMatcher
 class BertCLS(RelevanceMatcher):
     def __init__(
         self,
-        seq2vec_encoder: Seq2VecEncoder, # should generally be cls_pooler,
+        input_dim: int,
         **kwargs
     ):
-        kwargs['input_dim'] = seq2vec_encoder.get_output_dim()*4
-        super().__init__(**kwargs)
+        super().__init__(input_dim=input_dim*4, **kwargs)
 
-        self._seq2vec_encoder = seq2vec_encoder
+        # Gets the [CLS] token from BERT
+        self._seq2vec_encoder = ClsPooler(embedding_dim=input_dim)
 
     def forward(
         self, 

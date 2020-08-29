@@ -14,14 +14,14 @@ local MODEL_NAME = "google/bert_uncased_L-2_H-128_A-2";
         "model_name": MODEL_NAME,
       }
     },
-    "max_instances": 250
+    "max_instances": 50000
   },
   "train_data_path": DATA_ROOT % "train.tsv",
   "validation_data_path": DATA_ROOT % "valid.tsv",
   // "test_data_path": DATA_ROOT % "test.tsv",
   "model": {
     "type": "ranker",
-    "dropout": 0.15,
+    "dropout": 0.35,
     "text_field_embedder": {
       "token_embedders": {
         "tokens": {
@@ -34,10 +34,10 @@ local MODEL_NAME = "google/bert_uncased_L-2_H-128_A-2";
       // "num_classes": 1,
       "input_dim": 128,
       
-      "type": "knrm",
-      "kernel_function": { "type": "gaussian", "n_kernels": 128 },
+      // "type": "knrm",
+      // "kernel_function": { "type": "gaussian", "n_kernels": 128 },
 
-      // "type": "bert_cls", 
+      "type": "bert_cls", 
       // "seq2vec_encoder": { "type": "cls_pooler", "embedding_dim": 128 }
 
       // "type": "matchpyramid",
@@ -48,18 +48,18 @@ local MODEL_NAME = "google/bert_uncased_L-2_H-128_A-2";
   },
   "data_loader": {
     "type": "default",
-    "batch_size" : 128
+    "batch_size" : 256
   },
   "trainer": {
-    "num_epochs": 10,
-    "patience": 3,
+    "num_epochs": 5,
+    // "patience": 3,
     // "grad_norm": 5.0,
-    "validation_metric": "+ndcg",
+    "validation_metric": "+auc",
     "cuda_device": 0,
     "optimizer": {
-      "type": "huggingface_adamw",
+      "type": "adam", // "huggingface_adamw",
       "lr": 0.0001,
-      "weight_decay": 0
+      // "weight_decay": 0
     },
 
     "learning_rate_scheduler": {

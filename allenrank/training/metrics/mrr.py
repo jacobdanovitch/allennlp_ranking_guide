@@ -26,7 +26,8 @@ class MRR(RankingMetric):
     
 # https://stackoverflow.com/a/60202801/6766123
 def first_nonzero(t):
-    idx = torch.arange(t.size(1), 0, -1).type_as(t)
+    t = t.masked_fill(t != 0, 1)
+    idx = torch.arange(t.size(-1), 0, -1).type_as(t)
     indices = torch.argmax(t * idx, 1, keepdim=True)
     return indices
 
@@ -36,9 +37,9 @@ def mrr(y_pred, y_true, mask):
     y_true = y_true.ge(y_true.max(dim=-1, keepdim=True).values).float()
 
     _, idx = y_pred.sort(descending=True, dim=-1)
-    gold = torch.arange(y_true.size(-1)).unsqueeze(0).type_as(y_true)
-    
     ordered_truth = y_true.gather(1, idx)
+    
+    gold = torch.arange(y_true.size(-1)).unsqueeze(0).type_as(y_true)
     _mrr = (ordered_truth / (gold + 1)) * mask
     
     return _mrr.gather(1, first_nonzero(ordered_truth)).mean()
