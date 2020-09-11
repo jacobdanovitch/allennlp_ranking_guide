@@ -6,7 +6,13 @@ For continued development and updates, take a look at [allenrank](https://github
 
 ## Usage
 
-### Docker
+### Data
+
+Run `python scripts/data_split.py "https://github.com/microsoft/MIMICS/raw/master/data/MIMICS-ClickExplore.tsv"` to automatically download the dataset to your `/tmp/` directory.
+
+### Training
+
+#### Docker
 
 You can use the `docker-compose` file to start a docker container with the latest image of AllenNLP:
 
@@ -14,7 +20,7 @@ You can use the `docker-compose` file to start a docker container with the lates
 docker-compose run train
 ```
 
-### Manually
+#### Manually
 
 First, install the dependencies:
 
