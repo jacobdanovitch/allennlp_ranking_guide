@@ -47,7 +47,7 @@ local MODEL_NAME = "google/bert_uncased_L-2_H-128_A-2";
     }
   },
   "data_loader": {
-    "type": "default",
+    "type": "pytorch_dataloader",
     "batch_size" : 256
   },
   "trainer": {
